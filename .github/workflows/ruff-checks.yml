@@ -11,6 +11,28 @@ permissions:
   contents: read
   pull-requests: write # Essential for posting reviewdog suggestion comments
 
+# Configurable settings shared globally across checking jobs
+env:
+  # Maximum allowed line length for Python files
+  LINE_LENGTH: "80"
+  
+  # Styling and coding rules to select
+  # - E: pycodestyle errors (includes E501 line length checks)
+  # - F: pyflakes (checks logic errors, undefined vars, unused imports)
+  # - W: pycodestyle warnings
+  # - I: isort (checks import statement ordering and format)
+  # - C: flake8-comprehensions
+  # - B: flake8-bugbear
+  # - UP: pyupgrade
+  # - RUF: ruff specific rules
+  RULE_SELECT: "E,F,W,I,C,B,UP,RUF"
+  
+  # Styling rules to ignore
+  # - C901: Code complexity (keeps checks flexible)
+  # - B006: Mutable default arguments (required by some agent templates)
+  # - Note: E501 (line-too-long) is NOT here, so the 80 character limit is enforced!
+  RULE_IGNORE: "C901,B006"
+
 jobs:
   ruff-format:
     name: Ruff Format Suggestions
@@ -33,8 +55,8 @@ jobs:
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Apply formatting to the local runner filesystem
-          uvx ruff format .
+          # Apply formatting with global line length override
+          uvx ruff format --line-length=${{ env.LINE_LENGTH }} .
 
           # Post the diff as GitHub suggestions and fail the build if there are differences
           git diff | reviewdog -f=diff \
@@ -64,8 +86,12 @@ jobs:
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Apply lint auto-fixes to the local runner filesystem
-          uvx ruff check --fix . || true
+          # Apply lint auto-fixes with global settings override
+          uvx ruff check \
+            --line-length=${{ env.LINE_LENGTH }} \
+            --select=${{ env.RULE_SELECT }} \
+            --ignore=${{ env.RULE_IGNORE }} \
+            --fix . || true
 
           # Post the diff as GitHub suggestions
           git diff | reviewdog -f=diff \
@@ -82,8 +108,13 @@ jobs:
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          uvx ruff check --output-format=rdjson --exit-zero . | reviewdog -f=rdjson \
-                                                                         -name="ruff-linter" \
-                                                                         -reporter=github-pr-review \
-                                                                         -filter-mode=added \
-                                                                         -fail-on-error=true
+          uvx ruff check \
+            --line-length=${{ env.LINE_LENGTH }} \
+            --select=${{ env.RULE_SELECT }} \
+            --ignore=${{ env.RULE_IGNORE }} \
+            --output-format=rdjson \
+            --exit-zero . | reviewdog -f=rdjson \
+                                     -name="ruff-linter" \
+                                     -reporter=github-pr-review \
+                                     -filter-mode=added \
+                                     -fail-on-error=true
