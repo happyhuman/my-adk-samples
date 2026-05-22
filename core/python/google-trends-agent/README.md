@@ -91,7 +91,7 @@ For automated PR pipelines (where no default GCP credentials or active environme
 ```bash
 FORCE_MOCK=True uv run pytest tests/unit tests/integration
 ```
-* **Behavior:** The test bootloader ([tests/conftest.py](file:///Users/shahins/projects/mine/google-trends-agent/tests/conftest.py)) intercepts and overrides standard authenticators and cloud logging boundaries in-memory.
+* **Behavior:** The test bootloader ([tests/conftest.py](/core/python/google-trends-agent/tests/conftest.py)) intercepts and overrides standard authenticators and cloud logging boundaries in-memory.
 * **Auto-Skip Engine:** Live E2E integration tests (under `tests/integration/`) are dynamically skipped with a descriptive warning, preventing unauthenticated 401 connection crashes.
 * **Performance:** Executes zero external network handshakes, registers zero cloud service billing, and completes loading, compilation, and structure checks successfully in under **one second!**
 
@@ -101,11 +101,11 @@ FORCE_MOCK=True uv run pytest tests/unit tests/integration
 
 To establish frictionless, zero-config runnability checks on pull requests for your own developer samples:
 
-1. **Copy [tests/conftest.py](file:///Users/shahins/projects/mine/google-trends-agent/tests/conftest.py)** into the root of your new project's `tests/` folder.
+1. **Copy [tests/conftest.py](/core/python/google-trends-agent/tests/conftest.py)** into the root of your new project's `tests/` folder.
 2. **Tweak the Developer Configuration** dictionary block at the top of the file:
    * **`MOCK_ENVIRONMENT`**: Add all custom environmental variables that your agent logic validates upon launch (e.g., API keys, database URLs, deployment keys).
    * **`MOCK_SERVICES`**: Add any client libraries (Google-based like `google.cloud.aiplatform` or non-Google like `pinecone`, `slack_sdk`, `openai`) that execute live initialization routines at the module import level.
-3. **Add a Load Verification test** (similar to [tests/unit/test_runnability.py](file:///Users/shahins/projects/mine/google-trends-agent/tests/unit/test_runnability.py)) to import the agent application and assert structure shapes.
+3. **Add a Load Verification test** (similar to [tests/unit/test_runnability.py](/core/python/google-trends-agent/tests/unit/test_runnability.py)) to import the agent application and assert structure shapes.
 4. Place any tests that require active live model connections or database integrations under the `tests/integration/` target directory.
 
 ---
