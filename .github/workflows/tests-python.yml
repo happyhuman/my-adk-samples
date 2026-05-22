@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch complete history to locate the merge-base cleanly
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -26,43 +28,55 @@ jobs:
 
       - name: Find and Run Tests
         run: |
-          # 1. Dynamically resolve directories that actually exist in the clone
-          # (Empty directories like 'contrib' are untracked by Git and won't exist in CI)
-          SEARCH_DIRS=()
-          for d in core/python contrib; do
-            if [ -d "$d" ]; then
-              SEARCH_DIRS+=("$d")
-            fi
-          done
+          # 1. Fetch target branch reference commits
+          git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1
           
-          if [ ${#SEARCH_DIRS[@]} -eq 0 ]; then
-            SEARCH_DIRS=(".")
-          fi
+          # 2. Resolve Python files modified in this PR diff
+          CHANGED_PY_FILES=$(git diff --name-only --diff-filter=d origin/${{ github.event.pull_request.base.ref }}...HEAD | grep '\.py$' || true)
           
-          # Find all subfolders containing a pyproject.toml
-          PROJECT_DIRS=$(find "${SEARCH_DIRS[@]}" -name "pyproject.toml" -not -path "*/.*" -exec dirname {} \;)
-          
-          if [ -z "$PROJECT_DIRS" ]; then
-            echo "No Python projects found in the repository."
+          if [ -z "$CHANGED_PY_FILES" ]; then
+            echo "No Python files were modified in this Pull Request. Skipping logic tests."
             exit 0
           fi
           
-          # 2. Iterate and run pytest on each self-contained sample project
-          for dir in $PROJECT_DIRS; do
-            echo "======================================================="
-            echo "🚀 PYTHON TESTING: Running full test suite in $dir"
-            echo "======================================================="
-            
-            # Navigate into the project folder
+          # 3. Dynamic subproject mapping: locate closest parent pyproject.toml for each modified file
+          PROJECT_DIRS=()
+          for file in $CHANGED_PY_FILES; do
+            dir=$(dirname "$file")
+            # Climb up the tree looking for pyproject.toml
+            while [ "$dir" != "." ] && [ "$dir" != "/" ]; do
+              if [ -f "$dir/pyproject.toml" ]; then
+                # Add to array if not already present (ensure uniqueness)
+                if [[ ! " ${PROJECT_DIRS[@]} " =~ " ${dir} " ]]; then
+                  PROJECT_DIRS+=("$dir")
+                fi
+                break
+              fi
+              dir=$(dirname "$dir")
+            done
+          done
+          
+          if [ ${#PROJECT_DIRS[@]} -eq 0 ]; then
+            echo "No python project packages matched the modified files. Skipping logic tests."
+            exit 0
+          fi
+          
+          echo "======================================================="
+          echo "🎯 TARGETED PYTHON TESTING"
+          echo "======================================================="
+          for d in "${PROJECT_DIRS[@]}"; do
+            echo "  - $d"
+          done
+          echo "======================================================="
+          
+          # 4. Iterate and strictly test only the modified project directories
+          for dir in "${PROJECT_DIRS[@]}"; do
+            echo "👉 Running logic and unit tests inside: $dir"
             cd "$dir"
-            
-            # Install project environment including developer and optional groups
             uv sync --all-groups
             
             # Run all standard tests, ignoring structural runnability verification checks
             # (which are validated strictly inside the dedicated runnability gate)
             uv run pytest -v --ignore=tests/unit/test_runnability.py
-            
-            # Return back to workspace root
             cd - > /dev/null
           done

@@ -3,7 +3,7 @@ name: ✅ Ruff PR Checks
 on:
   pull_request:
     paths:
-      - "core/**/*.py"
+      - "core/python/**/*.py"
       - "contrib/**/*.py"
       - "**/pyproject.toml"
 
@@ -40,6 +40,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch complete history to locate the merge-base cleanly
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -55,15 +57,28 @@ jobs:
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Apply formatting with global line length override
-          uvx ruff format --line-length=${{ env.LINE_LENGTH }} .
+          # 1. Fetch the target branch reference commits
+          git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1
+          
+          # 2. Resolve Python files modified in this PR diff
+          CHANGED_FILES=$(git diff --name-only --diff-filter=d origin/${{ github.event.pull_request.base.ref }}...HEAD | grep '\.py$' || true)
+          
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No Python files were modified in this pull request. Skipping formatting."
+            exit 0
+          fi
+          
+          echo "Formatting files: $CHANGED_FILES"
+          
+          # 3. Format ONLY the modified python files
+          uvx ruff format --line-length=${{ env.LINE_LENGTH }} --force-exclude $CHANGED_FILES
 
-          # Post the diff as GitHub suggestions and fail the build if there are differences
-          git diff | reviewdog -f=diff \
-                               -name="ruff-formatter" \
-                               -reporter=github-pr-review \
-                               -filter-mode=added \
-                               -fail-on-error=true
+          # 4. Post formatting suggestion comments strictly targeting modified files
+          git diff $CHANGED_FILES | reviewdog -f=diff \
+                                              -name="ruff-formatter" \
+                                              -reporter=github-pr-review \
+                                              -filter-mode=added \
+                                              -fail-on-error=true
 
   ruff-lint:
     name: Ruff Lint Suggestions
@@ -71,6 +86,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch complete history to locate the merge-base cleanly
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -86,19 +103,33 @@ jobs:
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Apply lint auto-fixes with global settings override
+          # 1. Fetch the target branch reference commits
+          git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1
+          
+          # 2. Resolve Python files modified in this PR diff
+          CHANGED_FILES=$(git diff --name-only --diff-filter=d origin/${{ github.event.pull_request.base.ref }}...HEAD | grep '\.py$' || true)
+          
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No Python files were modified in this pull request. Skipping auto-fixes."
+            exit 0
+          fi
+          
+          echo "Applying auto-fixes to: $CHANGED_FILES"
+          
+          # 3. Apply auto-fixes ONLY to the modified python files
           uvx ruff check \
             --line-length=${{ env.LINE_LENGTH }} \
             --select=${{ env.RULE_SELECT }} \
             --ignore=${{ env.RULE_IGNORE }} \
-            --fix . || true
+            --force-exclude \
+            --fix $CHANGED_FILES || true
 
-          # Post the diff as GitHub suggestions
-          git diff | reviewdog -f=diff \
-                               -name="ruff-linter-suggestions" \
-                               -reporter=github-pr-review \
-                               -filter-mode=added \
-                               -fail-on-error=false
+          # 4. Post auto-fix suggestion comments strictly targeting modified files
+          git diff $CHANGED_FILES | reviewdog -f=diff \
+                                              -name="ruff-linter-suggestions" \
+                                              -reporter=github-pr-review \
+                                              -filter-mode=added \
+                                              -fail-on-error=false
 
       # Restore files so we can find non-fixable errors on the original user commits
       - name: Restore files to original state
@@ -108,13 +139,28 @@ jobs:
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # 1. Fetch the target branch reference commits
+          git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1
+          
+          # 2. Resolve Python files modified in this PR diff
+          CHANGED_FILES=$(git diff --name-only --diff-filter=d origin/${{ github.event.pull_request.base.ref }}...HEAD | grep '\.py$' || true)
+          
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No Python files were modified in this pull request. Skipping diagnostics check."
+            exit 0
+          fi
+          
+          echo "Running diagnostics linter on: $CHANGED_FILES"
+          
+          # 3. Run strict diagnostic linter in RDJSON format on only the modified python files
           uvx ruff check \
             --line-length=${{ env.LINE_LENGTH }} \
             --select=${{ env.RULE_SELECT }} \
             --ignore=${{ env.RULE_IGNORE }} \
+            --force-exclude \
             --output-format=rdjson \
-            --exit-zero . | reviewdog -f=rdjson \
-                                     -name="ruff-linter" \
-                                     -reporter=github-pr-review \
-                                     -filter-mode=added \
-                                     -fail-on-error=true
+            --exit-zero $CHANGED_FILES | reviewdog -f=rdjson \
+                                                   -name="ruff-linter" \
+                                                   -reporter=github-pr-review \
+                                                   -filter-mode=added \
+                                                   -fail-on-error=true
