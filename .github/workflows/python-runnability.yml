@@ -27,8 +27,21 @@ jobs:
 
       - name: Find and Run Runnability Tests
         run: |
-          # 1. Find all subfolders containing a pyproject.toml
-          PROJECT_DIRS=$(find core contrib -name "pyproject.toml" -exec dirname {} \;)
+          # 1. Dynamically resolve directories that actually exist in the clone
+          # (Empty directories like 'contrib' are untracked by Git and won't exist in CI)
+          SEARCH_DIRS=()
+          for d in core contrib; do
+            if [ -d "$d" ]; then
+              SEARCH_DIRS+=("$d")
+            fi
+          done
+          
+          if [ ${#SEARCH_DIRS[@]} -eq 0 ]; then
+            SEARCH_DIRS=(".")
+          fi
+          
+          # Find all subfolders containing a pyproject.toml
+          PROJECT_DIRS=$(find "${SEARCH_DIRS[@]}" -name "pyproject.toml" -not -path "*/.*" -exec dirname {} \;)
           
           if [ -z "$PROJECT_DIRS" ]; then
             echo "No Python projects found in the repository."
