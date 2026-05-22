@@ -66,7 +66,7 @@ jobs:
               echo "✅ Structural runnability verification harness found."
               uv run pytest -v tests/unit/test_runnability.py
             else
-              echo "❌ ERROR: Mandatory structural runnability test harness was not found at: $dir/tests/unit/test_runnability.py!"
+              echo "❌ ERROR: Mandatory runnability test file was not found at: $dir/tests/unit/test_runnability.py!"
               echo "Every ADK python sample is strictly required to implement 'tests/unit/test_runnability.py' to verify structural bootability."
               exit 1
             fi
