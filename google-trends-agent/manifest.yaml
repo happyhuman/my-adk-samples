@@ -1,0 +1,19 @@
+name: "google-trends-agent"
+team:
+  - name: "Cloud AI Developer Engineering & Evangelism"
+  - email: "caiis-advocacy@google.com"
+authors:
+  - name: "Shahin Saadati"
+    email: "shahins@google.com"
+description: >-
+  An agent acting as a Google Search Trends Analyst. The agent programmatically
+  interacts with, queries, and analyzes search trend behaviors leveraging the public
+  BigQuery dataset bigquery-public-data.google_trends.
+
+tags:
+  - "google-trends"
+  - "bigquery"
+  - "mcp-server"
+  - "adk"
+  - "data-analyst"
+demonstrates: "How BigQuery's MCP server easily connects an ADK agent to a dataset."
