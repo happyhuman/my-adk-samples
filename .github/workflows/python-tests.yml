@@ -1,4 +1,4 @@
-name: 🐍 Python Runnability Checks
+name: 🧪 Python Logic Tests
 
 on:
   pull_request:
@@ -7,14 +7,13 @@ on:
       - "contrib/**/*.py"
       - "**/pyproject.toml"
       - "**/uv.lock"
-      - "**/manifest.yaml"
 
 permissions:
   contents: read
 
 jobs:
-  runnability:
-    name: Verify Python Runnability
+  tests:
+    name: Run Python Tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -25,7 +24,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Find and Run Runnability Tests
+      - name: Find and Run Tests
         run: |
           # 1. Dynamically resolve directories that actually exist in the clone
           # (Empty directories like 'contrib' are untracked by Git and won't exist in CI)
@@ -51,7 +50,7 @@ jobs:
           # 2. Iterate and run pytest on each self-contained sample project
           for dir in $PROJECT_DIRS; do
             echo "======================================================="
-            echo "🚀 RUNNABILITY CHECKS: Checking project in $dir"
+            echo "🚀 PYTHON TESTING: Running full test suite in $dir"
             echo "======================================================="
             
             # Navigate into the project folder
@@ -60,16 +59,9 @@ jobs:
             # Install project environment including developer and optional groups
             uv sync --all-groups
             
-            # Run ONLY structural compile and configuration tests (Mandatory Gate)
-            # (Conftest.py handles local GCP mocks automatically in CI)
-            if [ -f "tests/unit/test_runnability.py" ]; then
-              echo "✅ Structural runnability verification harness found."
-              uv run pytest -v tests/unit/test_runnability.py
-            else
-              echo "❌ ERROR: Mandatory structural runnability test harness was not found at: $dir/tests/unit/test_runnability.py!"
-              echo "Every ADK python sample is strictly required to implement 'tests/unit/test_runnability.py' to verify structural bootability."
-              exit 1
-            fi
+            # Run all standard tests, ignoring structural runnability verification checks
+            # (which are validated strictly inside the dedicated runnability gate)
+            uv run pytest -v --ignore=tests/unit/test_runnability.py
             
             # Return back to workspace root
             cd - > /dev/null
