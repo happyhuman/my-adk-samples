@@ -1,0 +1,89 @@
+name: 🐍 Python Runnability Checks
+
+on:
+  pull_request:
+    paths:
+      - "core/python/**/*.py"
+      - "contrib/**/*.py"
+      - "**/pyproject.toml"
+      - "**/uv.lock"
+      - "**/manifest.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  runnability:
+    name: Verify Python Runnability
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch complete history to locate the merge-base cleanly
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+
+      - name: Find and Run Runnability Tests
+        run: |
+          # 1. Fetch target branch reference commits
+          git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1
+          
+          # 2. Resolve Python files modified in this PR diff
+          CHANGED_PY_FILES=$(git diff --name-only --diff-filter=d origin/${{ github.event.pull_request.base.ref }}...HEAD | grep '\.py$' || true)
+          
+          if [ -z "$CHANGED_PY_FILES" ]; then
+            echo "No Python files were modified in this Pull Request. Skipping runnability check."
+            exit 0
+          fi
+          
+          # 3. Dynamic subproject mapping: locate closest parent pyproject.toml for each modified file
+          PROJECT_DIRS=()
+          for file in $CHANGED_PY_FILES; do
+            dir=$(dirname "$file")
+            # Climb up the tree looking for pyproject.toml
+            while [ "$dir" != "." ] && [ "$dir" != "/" ]; do
+              if [ -f "$dir/pyproject.toml" ]; then
+                # Add to array if not already present (ensure uniqueness)
+                if [[ ! " ${PROJECT_DIRS[@]} " =~ " ${dir} " ]]; then
+                  PROJECT_DIRS+=("$dir")
+                fi
+                break
+              fi
+              dir=$(dirname "$dir")
+            done
+          done
+          
+          if [ ${#PROJECT_DIRS[@]} -eq 0 ]; then
+            echo "No python project packages matched the modified files. Skipping runnability check."
+            exit 0
+          fi
+          
+          echo "======================================================="
+          echo "🎯 TARGETED RUNNABILITY CHECKS"
+          echo "======================================================="
+          for d in "${PROJECT_DIRS[@]}"; do
+            echo "  - $d"
+          done
+          echo "======================================================="
+          
+          # 4. Iterate and strictly check only the modified project directories
+          for dir in "${PROJECT_DIRS[@]}"; do
+            echo "👉 Runnability checking project in: $dir"
+            cd "$dir"
+            uv sync --all-groups
+            
+            # Run ONLY structural compile and configuration tests (Mandatory Gate)
+            if [ -f "tests/unit/test_runnability.py" ]; then
+              echo "✅ Structural runnability verification harness found."
+              uv run pytest -v tests/unit/test_runnability.py
+            else
+              echo "❌ ERROR: Mandatory runnability test file was not found at: $dir/tests/unit/test_runnability.py!"
+              echo "Every ADK python sample is strictly required to implement 'tests/unit/test_runnability.py' to verify structural bootability."
+              exit 1
+            fi
+            cd - > /dev/null
+          done

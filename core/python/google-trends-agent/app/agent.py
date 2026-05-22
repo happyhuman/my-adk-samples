@@ -29,13 +29,13 @@ from google.auth.transport.requests import Request
 # Load environment variables from local .env configuration file
 load_dotenv()
 
-gemini_model = os.environ.get("MODEL_NAME")
-if not gemini_model:
-    raise ValueError("MODEL_NAME environment variable is not set")
-
 project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
 if not project_id:
     raise ValueError("GOOGLE_CLOUD_PROJECT environment variable is not set")
+
+gemini_model = os.environ.get("MODEL_NAME")
+if not gemini_model:
+    raise ValueError("MODEL_NAME environment variable is not set")
 
 
 def get_agent_instruction(project_id: str) -> str:

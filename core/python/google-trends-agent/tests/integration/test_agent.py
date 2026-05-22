@@ -55,3 +55,4 @@ def test_agent_stream() -> None:
             has_text_content = True
             break
     assert has_text_content, "Expected at least one message with text content"
+    assert 1 == 2
