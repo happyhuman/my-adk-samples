@@ -1,0 +1,89 @@
+name: ✅ Ruff PR Checks
+
+on:
+  pull_request:
+    paths:
+      - "core/**/*.py"
+      - "contrib/**/*.py"
+      - "**/pyproject.toml"
+
+permissions:
+  contents: read
+  pull-requests: write # Essential for posting reviewdog suggestion comments
+
+jobs:
+  ruff-format:
+    name: Ruff Format Suggestions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+    
+      - name: Install Reviewdog
+        uses: reviewdog/action-setup@v1
+        with:
+          reviewdog_version: latest
+
+      - name: Run Ruff Format & Suggest Changes
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Apply formatting to the local runner filesystem
+          uvx ruff format .
+
+          # Post the diff as GitHub suggestions and fail the build if there are differences
+          git diff | reviewdog -f=diff \
+                               -name="ruff-formatter" \
+                               -reporter=github-pr-review \
+                               -filter-mode=added \
+                               -fail-on-error=true
+
+  ruff-lint:
+    name: Ruff Lint Suggestions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+    
+      - name: Install Reviewdog
+        uses: reviewdog/action-setup@v1
+        with:
+          reviewdog_version: latest
+
+      - name: Post Lint Auto-Fix Suggestions
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Apply lint auto-fixes to the local runner filesystem
+          uvx ruff check --fix . || true
+
+          # Post the diff as GitHub suggestions
+          git diff | reviewdog -f=diff \
+                               -name="ruff-linter-suggestions" \
+                               -reporter=github-pr-review \
+                               -filter-mode=added \
+                               -fail-on-error=false
+
+      # Restore files so we can find non-fixable errors on the original user commits
+      - name: Restore files to original state
+        run: git checkout -- .
+
+      - name: Run Ruff Linter & Fail on Violations
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          uvx ruff check --output-format=rdjson --exit-zero . | reviewdog -f=rdjson \
+                                                                         -name="ruff-linter" \
+                                                                         -reporter=github-pr-review \
+                                                                         -filter-mode=added \
+                                                                         -fail-on-error=true
