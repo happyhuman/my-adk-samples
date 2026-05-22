@@ -87,7 +87,12 @@ mcp_headers = {
 } | get_auth_headers()
 
 # Configure BigQuery Tools via MCP
-bq_tools = McpToolset(connection_params=StreamableHTTPConnectionParams(url="https://bigquery.googleapis.com/mcp", headers=mcp_headers))
+bq_tools = McpToolset(
+    connection_params=StreamableHTTPConnectionParams(
+        url="https://bigquery.googleapis.com/mcp",
+        headers=mcp_headers,
+    )
+)
 
 # Initialize the LLM Agent
 root_agent = Agent(
